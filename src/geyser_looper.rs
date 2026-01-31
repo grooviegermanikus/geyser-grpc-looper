@@ -8,6 +8,7 @@ use yellowstone_grpc_proto::geyser::subscribe_update::UpdateOneof;
 use yellowstone_grpc_proto::geyser::{SlotStatus, SubscribeUpdate};
 
 pub struct MessagesBuffer {
+    #[allow(clippy::vec_box)]
     grpc_updates: Vec<Box<SubscribeUpdate>>,
 }
 
