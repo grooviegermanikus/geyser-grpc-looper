@@ -151,7 +151,6 @@ fn get_slot(update: &UpdateOneof) -> anyhow::Result<Slot> {
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 mod tests {
-    use std::collections::HashMap;
     use std::fs::File;
     use std::io::{BufRead, BufReader};
     use std::path::Path;
@@ -165,7 +164,6 @@ mod tests {
     use anyhow::anyhow;
     use itertools::Itertools;
     use log::trace;
-    use solana_clock::Slot;
     use solana_pubkey::Pubkey;
     use solana_signature::Signature;
     use std::str::FromStr;
@@ -367,8 +365,6 @@ mod tests {
             .map(|(update, ..)| update)
             .collect_vec();
 
-        let count_non_slot_per_slot: HashMap<Slot, u64> = HashMap::from([(1212, 12)]);
-
         for update in iter {
             let subscribe_update = SubscribeUpdate {
                 filters: vec![],
@@ -390,24 +386,13 @@ mod tests {
                 }
                 Effect::EmitLateConfirmedMessage {
                     confirmed_slot,
-                    grpc_update,
+                    grpc_update: _,
                 } => {
                     println!("from slot {} got late message", confirmed_slot);
                 }
                 Effect::Noop => {}
             }
         }
-    }
-
-    pub fn read_messages_from_csv(
-        source: impl Iterator<Item = String>,
-        filter_source_idx: Option<u32>,
-    ) -> anyhow::Result<Vec<(UpdateOneof, SourceIdx)>> {
-        read_messages_from_csv_with_line_no(source, filter_source_idx).map(|vec| {
-            vec.into_iter()
-                .map(|(msg, source_idx, _line_no)| (msg, source_idx))
-                .collect_vec()
-        })
     }
 
     pub fn read_messages_from_csv_with_line_no(
@@ -512,7 +497,7 @@ mod tests {
                 ));
             }
             if line.starts_with("DUMPTX") {
-                let (_full_match, [source_idx, slot, sig, epoch_ms]) =
+                let (_full_match, [source_idx, slot, sig, _epoch_ms]) =
                     regex_dumptx.captures(&line).expect(&line).extract();
 
                 let source_idx = source_idx.parse::<u32>().unwrap();
@@ -522,10 +507,10 @@ mod tests {
                     }
                 }
 
-                // let slot = slot.parse::<u64>().unwrap();
+                let slot = slot.parse::<u64>().unwrap();
                 // let index = index.parse::<u64>().unwrap();
                 let index = 4242;
-                let _signature = Signature::from_str(sig).unwrap();
+                let signature = Signature::from_str(sig).unwrap();
 
                 let message = yellowstone_grpc_proto::prelude::Message {
                     header: None,
