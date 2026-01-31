@@ -1,17 +1,11 @@
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::str::FromStr;
-use yellowstone_grpc_proto::geyser::{SubscribeUpdateSlot, SlotStatus as ySS, SubscribeUpdate, SlotStatus, CommitmentLevel, SubscribeRequestFilterSlots};
-use anyhow::{anyhow, bail, Context};
+use anyhow::{bail, Context};
 use log::trace;
 use solana_clock::Slot;
-use solana_commitment_config::CommitmentConfig;
-use solana_signature::Signature;
-use tracing::field::debug;
+use std::collections::{BTreeMap, BTreeSet};
 use yellowstone_grpc_proto::geyser::subscribe_update::UpdateOneof;
-use yellowstone_grpc_proto::prelude::{SubscribeRequest, SubscribeUpdatePing, SubscribeUpdateTransactionStatus};
-use crate::yellow_util::map_commitment_level;
+use yellowstone_grpc_proto::geyser::{SlotStatus, SubscribeUpdate};
 
 pub struct MessagesBuffer {
     grpc_updates: Vec<Box<SubscribeUpdate>>,
@@ -20,18 +14,22 @@ pub struct MessagesBuffer {
 // note: there is still an ordering problem where data might arrive after slot confirmed message was seen
 // - only support confirmed level
 pub struct GeyserLooper {
-
     buffer: BTreeMap<Slot, MessagesBuffer>,
 
     // maintain a safety window where we emit single messages
     confirmed_slots: BTreeSet<Slot>,
-
 }
 
 pub enum Effect {
-    EmitConfirmedMessages { confirmed_slot: Slot, grpc_updates: Vec<Box<SubscribeUpdate>> },
+    EmitConfirmedMessages {
+        confirmed_slot: Slot,
+        grpc_updates: Vec<Box<SubscribeUpdate>>,
+    },
     // some messages might arrive after confirmed slot was seen
-    EmitLateConfirmedMessage { confirmed_slot: Slot, grpc_update: Box<SubscribeUpdate> },
+    EmitLateConfirmedMessage {
+        confirmed_slot: Slot,
+        grpc_update: Box<SubscribeUpdate>,
+    },
     Noop,
 }
 
@@ -39,7 +37,6 @@ pub enum Effect {
 const LATE_MESSAGES_SAFETY_WINDOW: u64 = 64;
 
 impl GeyserLooper {
-
     pub fn new() -> Self {
         Self {
             buffer: BTreeMap::new(),
@@ -52,13 +49,13 @@ impl GeyserLooper {
     }
 
     pub fn consume(&mut self, update: Box<SubscribeUpdate>) -> anyhow::Result<Effect> {
-
         match update.update_oneof.as_ref() {
             Some(UpdateOneof::Slot(msg)) => {
                 if update.filters != vec!["_magic_confirmed_slots".to_string()] {
                     bail!("unexpected slot message with filters: {:?}", update.filters);
                 }
-                let commitment_status = SlotStatus::try_from(msg.status).context("unknown status")?;
+                let commitment_status =
+                    SlotStatus::try_from(msg.status).context("unknown status")?;
 
                 if commitment_status != SlotStatus::SlotConfirmed {
                     // we do not pass through slot processed+finalized
@@ -66,7 +63,12 @@ impl GeyserLooper {
                 }
                 let confirmed_slot = msg.slot;
                 // lazily fall back to empty list
-                let mut messages = self.buffer.remove(&confirmed_slot).unwrap_or( MessagesBuffer{ grpc_updates: Vec::new() });
+                let mut messages = self
+                    .buffer
+                    .remove(&confirmed_slot)
+                    .unwrap_or(MessagesBuffer {
+                        grpc_updates: Vec::new(),
+                    });
 
                 // append the slot message
                 messages.grpc_updates.push(update);
@@ -80,11 +82,18 @@ impl GeyserLooper {
                 debug_assert!(was_new, "only one confirmed slot message expected");
 
                 // clean up the window of confirmed_slots
-                self.confirmed_slots.retain(|s| s + LATE_MESSAGES_SAFETY_WINDOW >= confirmed_slot);
+                self.confirmed_slots
+                    .retain(|s| s + LATE_MESSAGES_SAFETY_WINDOW >= confirmed_slot);
 
-                trace!("Emit {} messages for slot {}", messages.grpc_updates.len(), confirmed_slot);
-                return Ok(Effect::EmitConfirmedMessages { confirmed_slot, grpc_updates: messages.grpc_updates });
-
+                trace!(
+                    "Emit {} messages for slot {}",
+                    messages.grpc_updates.len(),
+                    confirmed_slot
+                );
+                return Ok(Effect::EmitConfirmedMessages {
+                    confirmed_slot,
+                    grpc_updates: messages.grpc_updates,
+                });
             }
             // all messages except slot (+ping pong)
             Some(msg) => {
@@ -96,12 +105,19 @@ impl GeyserLooper {
 
                 if self.confirmed_slots.contains(&slot) {
                     trace!("Emit late message for recently confirmed slot {}", slot);
-                    return Ok(Effect::EmitLateConfirmedMessage { confirmed_slot: slot, grpc_update: update });
+                    return Ok(Effect::EmitLateConfirmedMessage {
+                        confirmed_slot: slot,
+                        grpc_update: update,
+                    });
                 }
 
-                self.buffer.entry(slot)
-                    .or_insert_with(|| MessagesBuffer { grpc_updates: Vec::with_capacity(64) })
-                    .grpc_updates.push(update);
+                self.buffer
+                    .entry(slot)
+                    .or_insert_with(|| MessagesBuffer {
+                        grpc_updates: Vec::with_capacity(64),
+                    })
+                    .grpc_updates
+                    .push(update);
             }
             None => {
                 // not really expected
@@ -110,39 +126,21 @@ impl GeyserLooper {
 
         Ok(Effect::Noop)
     }
-
-
 }
 
 fn get_slot(update: &UpdateOneof) -> anyhow::Result<Slot> {
     Ok(match update {
-        UpdateOneof::Account(msg) => {
-            msg.slot
-        }
-        UpdateOneof::TransactionStatus(msg) => {
-            msg.slot
-        }
-        UpdateOneof::Transaction(msg) => {
-            msg.slot
-        }
-        UpdateOneof::Block(msg) => {
-            msg.slot
-        }
-        UpdateOneof::BlockMeta(msg) => {
-            msg.slot
-        }
-        UpdateOneof::Entry(msg) => {
-            msg.slot
-        }
+        UpdateOneof::Account(msg) => msg.slot,
+        UpdateOneof::TransactionStatus(msg) => msg.slot,
+        UpdateOneof::Transaction(msg) => msg.slot,
+        UpdateOneof::Block(msg) => msg.slot,
+        UpdateOneof::BlockMeta(msg) => msg.slot,
+        UpdateOneof::Entry(msg) => msg.slot,
         _ => {
             bail!("unsupported update type for get_slot: {:?}", update);
         }
     })
 }
-
-
-
-
 
 #[cfg(test)]
 mod tests {
@@ -150,22 +148,25 @@ mod tests {
     use std::fs::File;
     use std::io::{BufRead, BufReader};
     use std::path::Path;
-    use yellowstone_grpc_proto::geyser::{SubscribeUpdateSlot, SlotStatus as ySS, SubscribeUpdate, SlotStatus, CommitmentLevel, SubscribeUpdateTransactionStatus, SubscribeUpdatePing, SubscribeUpdateTransactionInfo, SubscribeUpdateTransaction, SubscribeUpdateAccount};
+    use yellowstone_grpc_proto::geyser::{
+        SlotStatus as ySS, SlotStatus, SubscribeUpdate, SubscribeUpdateAccount,
+        SubscribeUpdatePing, SubscribeUpdateSlot, SubscribeUpdateTransaction,
+        SubscribeUpdateTransactionInfo, SubscribeUpdateTransactionStatus,
+    };
 
-    use std::str::FromStr;
+    use crate::geyser_looper::{Effect, GeyserLooper};
     use anyhow::anyhow;
     use itertools::Itertools;
     use log::trace;
     use solana_clock::Slot;
     use solana_pubkey::Pubkey;
     use solana_signature::Signature;
+    use std::str::FromStr;
     use yellowstone_grpc_proto::geyser::subscribe_update::UpdateOneof;
-    use yellowstone_grpc_proto::prelude::{Message, SubscribeUpdateAccountInfo, TransactionStatusMeta};
-    use crate::geyser_looper::{Effect, GeyserLooper};
+    use yellowstone_grpc_proto::prelude::{SubscribeUpdateAccountInfo, TransactionStatusMeta};
 
     #[test]
     pub fn test_simple() {
-
         let mut looper = GeyserLooper::new();
 
         let effect = looper.consume_move(SubscribeUpdate {
@@ -178,12 +179,15 @@ mod tests {
                 dead_error: None,
             })),
         });
-        let Ok(Effect::EmitConfirmedMessages{confirmed_slot, grpc_updates: grpc_update }) = effect else {
+        let Ok(Effect::EmitConfirmedMessages {
+            confirmed_slot,
+            grpc_updates: grpc_update,
+        }) = effect
+        else {
             panic!()
         };
         assert_eq!(confirmed_slot, 41_999_000);
         assert_eq!(grpc_update.len(), 1); // slot message
-
 
         let sig1 = Signature::from_str("2h6iPLYZEEt8RMY3gGFUqd4Jktrg2fYTCMffifRoQDJWPqLvZ1gRKqpq4e5s8kWrVigkyDXV6xEiw54zuChYBdyB").unwrap();
         let sig2 = Signature::from_str("5QE2kQUiMpv51seq4ShtoaAzdkMT7fzeQ5TvqTPFgNkcahtHSnZudindggjTUXt8uqZGifbWUAmUubdWLhFHz719").unwrap();
@@ -193,13 +197,15 @@ mod tests {
             let effect = looper.consume_move(SubscribeUpdate {
                 filters: vec![],
                 created_at: None,
-                update_oneof: Some(UpdateOneof::TransactionStatus(SubscribeUpdateTransactionStatus {
-                    slot: 42_000_000,
-                    signature: sig.as_ref().to_vec(),
-                    is_vote: false,
-                    index: 0,
-                    err: None,
-                })),
+                update_oneof: Some(UpdateOneof::TransactionStatus(
+                    SubscribeUpdateTransactionStatus {
+                        slot: 42_000_000,
+                        signature: sig.as_ref().to_vec(),
+                        is_vote: false,
+                        index: 0,
+                        err: None,
+                    },
+                )),
             });
             assert!(matches!(effect, Ok(Effect::Noop)));
         }
@@ -233,10 +239,8 @@ mod tests {
                 dead_error: None,
             })),
         });
-        assert!(matches!(effect, Ok(Effect::EmitConfirmedMessages{..})));
-
+        assert!(matches!(effect, Ok(Effect::EmitConfirmedMessages { .. })));
     }
-
 
     #[test]
     pub fn test_emit_late_message() {
@@ -247,18 +251,17 @@ mod tests {
         let effect = looper.consume_move(SubscribeUpdate {
             filters: vec![],
             created_at: None,
-            update_oneof: Some(UpdateOneof::TransactionStatus(SubscribeUpdateTransactionStatus {
-                slot: 43_000_000,
-                signature: sig1.as_ref().to_vec(),
-                is_vote: false,
-                index: 0,
-                err: None,
-            })),
+            update_oneof: Some(UpdateOneof::TransactionStatus(
+                SubscribeUpdateTransactionStatus {
+                    slot: 43_000_000,
+                    signature: sig1.as_ref().to_vec(),
+                    is_vote: false,
+                    index: 0,
+                    err: None,
+                },
+            )),
         });
         assert!(matches!(effect, Ok(Effect::Noop)));
-
-
-
 
         let effect = looper.consume_move(SubscribeUpdate {
             filters: vec![],
@@ -270,7 +273,11 @@ mod tests {
                 dead_error: None,
             })),
         });
-        let Ok(Effect::EmitConfirmedMessages { confirmed_slot, grpc_updates: grpc_update }) = effect else {
+        let Ok(Effect::EmitConfirmedMessages {
+            confirmed_slot,
+            grpc_updates: grpc_update,
+        }) = effect
+        else {
             panic!()
         };
         assert_eq!(confirmed_slot, 43_000_000);
@@ -282,31 +289,38 @@ mod tests {
         let effect = looper.consume_move(SubscribeUpdate {
             filters: vec![],
             created_at: None,
-            update_oneof: Some(UpdateOneof::TransactionStatus(SubscribeUpdateTransactionStatus {
-                slot: 43_000_001,
-                signature: sig3.as_ref().to_vec(),
-                is_vote: false,
-                index: 0,
-                err: None,
-            })),
+            update_oneof: Some(UpdateOneof::TransactionStatus(
+                SubscribeUpdateTransactionStatus {
+                    slot: 43_000_001,
+                    signature: sig3.as_ref().to_vec(),
+                    is_vote: false,
+                    index: 0,
+                    err: None,
+                },
+            )),
         });
         assert!(matches!(effect, Ok(Effect::Noop)));
-
 
         let sig_late = Signature::from_str("5QE2kQUiMpv51seq4ShtoaAzdkMT7fzeQ5TvqTPFgNkcahtHSnZudindggjTUXt8uqZGifbWUAmUubdWLhFHz719").unwrap();
         let effect = looper.consume_move(SubscribeUpdate {
             filters: vec![],
             created_at: None,
-            update_oneof: Some(UpdateOneof::TransactionStatus(SubscribeUpdateTransactionStatus {
-                slot: 43_000_000,
-                signature: sig_late.as_ref().to_vec(),
-                is_vote: false,
-                index: 99,
-                err: None,
-            })),
+            update_oneof: Some(UpdateOneof::TransactionStatus(
+                SubscribeUpdateTransactionStatus {
+                    slot: 43_000_000,
+                    signature: sig_late.as_ref().to_vec(),
+                    is_vote: false,
+                    index: 99,
+                    err: None,
+                },
+            )),
         });
 
-        let Ok(Effect::EmitLateConfirmedMessage {confirmed_slot, grpc_update: grpc_message }) = effect else {
+        let Ok(Effect::EmitLateConfirmedMessage {
+            confirmed_slot,
+            grpc_update: grpc_message,
+        }) = effect
+        else {
             panic!()
         };
         assert_eq!(confirmed_slot, 43_000_000);
@@ -321,16 +335,17 @@ mod tests {
         let effect = looper.consume_move(SubscribeUpdate {
             filters: vec![],
             created_at: None,
-            update_oneof: Some(UpdateOneof::TransactionStatus(SubscribeUpdateTransactionStatus {
-                slot: 42_999_000,
-                signature: sig_verylate.as_ref().to_vec(),
-                is_vote: false,
-                index: 77,
-                err: None,
-            })),
+            update_oneof: Some(UpdateOneof::TransactionStatus(
+                SubscribeUpdateTransactionStatus {
+                    slot: 42_999_000,
+                    signature: sig_verylate.as_ref().to_vec(),
+                    is_vote: false,
+                    index: 77,
+                    err: None,
+                },
+            )),
         });
         assert!(matches!(effect, Ok(Effect::Noop)));
-
     }
 
     #[test]
@@ -339,11 +354,13 @@ mod tests {
         let mut looper = GeyserLooper::new();
 
         let lines = read_lines_from_file("../fixtures/geyser_loop/geyser-trace-100k.csv").unwrap();
-        let iter = read_messages_from_csv_with_line_no(lines, Some(1)).unwrap().into_iter()
-            .map(|(update, ..)| update).collect_vec();
+        let iter = read_messages_from_csv_with_line_no(lines, Some(1))
+            .unwrap()
+            .into_iter()
+            .map(|(update, ..)| update)
+            .collect_vec();
 
         let count_non_slot_per_slot: HashMap<Slot, u64> = HashMap::from([(1212, 12)]);
-
 
         for update in iter {
             let subscribe_update = SubscribeUpdate {
@@ -354,20 +371,26 @@ mod tests {
             let result = looper.consume_move(subscribe_update).unwrap();
 
             match result {
-                Effect::EmitConfirmedMessages { confirmed_slot, grpc_updates } => {
-                    println!("from slot {} got {} messages", confirmed_slot, grpc_updates.len());
+                Effect::EmitConfirmedMessages {
+                    confirmed_slot,
+                    grpc_updates,
+                } => {
+                    println!(
+                        "from slot {} got {} messages",
+                        confirmed_slot,
+                        grpc_updates.len()
+                    );
                 }
-                Effect::EmitLateConfirmedMessage { confirmed_slot, grpc_update } => {
+                Effect::EmitLateConfirmedMessage {
+                    confirmed_slot,
+                    grpc_update,
+                } => {
                     println!("from slot {} got late message", confirmed_slot);
                 }
                 Effect::Noop => {}
             }
-
         }
-
     }
-
-
 
     pub fn read_messages_from_csv(
         source: impl Iterator<Item = String>,
@@ -379,7 +402,6 @@ mod tests {
                 .collect_vec()
         })
     }
-
 
     pub fn read_messages_from_csv_with_line_no(
         source: impl Iterator<Item = String>,
@@ -476,7 +498,7 @@ mod tests {
                             account: Some(update),
                             slot,
                             is_startup: false,
-                        }
+                        },
                     ),
                     SourceIdx::new(source_idx),
                     line_no,
@@ -583,7 +605,5 @@ mod tests {
             assert!(idx < 5 as u32, "source index too big");
             SourceIdx(idx)
         }
-
     }
-
 }

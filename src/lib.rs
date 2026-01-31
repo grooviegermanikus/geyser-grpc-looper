@@ -1,10 +1,9 @@
-use std::collections::HashMap;
-use anyhow::bail;
+use crate::yellow_util::map_commitment_level;
+use crate::LooperError::{CannotRequestSlots, OnlyCommittedProcessedAllowed};
 use solana_commitment_config::CommitmentConfig;
+use std::collections::HashMap;
 use yellowstone_grpc_proto::geyser::SubscribeRequestFilterSlots;
 use yellowstone_grpc_proto::prelude::SubscribeRequest;
-use crate::LooperError::{CannotRequestSlots, OnlyCommittedProcessedAllowed};
-use crate::yellow_util::map_commitment_level;
 
 pub mod geyser_looper;
 mod yellow_util;
@@ -19,35 +18,40 @@ pub enum LooperError {
     CannotRequestSlots,
 
     #[error("LooperSubscribeRequest only supports CommitmentConfig::processed()")]
-    OnlyCommittedProcessedAllowed
+    OnlyCommittedProcessedAllowed,
 }
-
 
 impl TryFrom<SubscribeRequest> for LooperSubscribeRequest {
     type Error = LooperError;
 
     fn try_from(subscription: SubscribeRequest) -> Result<Self, Self::Error> {
-
         if !subscription.slots.is_empty() {
             return Err(CannotRequestSlots);
         }
         // force callers to set processed to avoid confusion
-        if subscription.commitment != Some(map_commitment_level(CommitmentConfig::processed()) as i32) {
+        if subscription.commitment
+            != Some(map_commitment_level(CommitmentConfig::processed()) as i32)
+        {
             return Err(OnlyCommittedProcessedAllowed);
         }
 
-        let magic_slots_subscription = SubscribeRequestFilterSlots { filter_by_commitment: None, interslot_updates: None };
+        let magic_slots_subscription = SubscribeRequestFilterSlots {
+            filter_by_commitment: None,
+            interslot_updates: None,
+        };
 
         let subscribe_request = SubscribeRequest {
-            slots: HashMap::from([
-                ("_magic_confirmed_slots".to_string(), magic_slots_subscription),
-            ]),
+            slots: HashMap::from([(
+                "_magic_confirmed_slots".to_string(),
+                magic_slots_subscription,
+            )]),
             commitment: Some(map_commitment_level(CommitmentConfig::processed()) as i32),
             ..subscription
         };
 
-        Ok(Self { inner: subscribe_request})
-
+        Ok(Self {
+            inner: subscribe_request,
+        })
     }
 }
 

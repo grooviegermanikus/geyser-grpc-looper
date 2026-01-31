@@ -9,4 +9,3 @@ pub(crate) const fn map_commitment_level(commitment_config: CommitmentConfig) ->
         solana_commitment_config::CommitmentLevel::Finalized => CommitmentLevel::Finalized,
     }
 }
-
