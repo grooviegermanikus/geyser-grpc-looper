@@ -158,10 +158,10 @@ mod tests {
     use anyhow::anyhow;
     use itertools::Itertools;
     use log::trace;
+    use solana_clock::Slot;
     use solana_pubkey::Pubkey;
     use solana_signature::Signature;
     use std::str::FromStr;
-    use solana_clock::Slot;
     use yellowstone_grpc_proto::geyser::subscribe_update::UpdateOneof;
     use yellowstone_grpc_proto::prelude::{SubscribeUpdateAccountInfo, TransactionStatusMeta};
 
@@ -226,7 +226,7 @@ mod tests {
 
     #[test]
     pub fn test_emit_late_message() {
-        let mut looper = GeyserLooper::new();;
+        let mut looper = GeyserLooper::new();
 
         let sig1 = Signature::from_str("2h6iPLYZEEt8RMY3gGFUqd4Jktrg2fYTCMffifRoQDJWPqLvZ1gRKqpq4e5s8kWrVigkyDXV6xEiw54zuChYBdyB").unwrap();
 
@@ -570,8 +570,6 @@ mod tests {
                     dead_error: None,
                 })),
             })
-
         }
     }
-
 }

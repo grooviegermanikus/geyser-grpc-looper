@@ -4,7 +4,6 @@ use solana_commitment_config::CommitmentConfig;
 use std::collections::HashMap;
 use yellowstone_grpc_proto::geyser::SubscribeRequestFilterSlots;
 use yellowstone_grpc_proto::prelude::SubscribeRequest;
-use yellowstone_grpc_proto::prost;
 
 pub mod geyser_looper;
 mod yellow_util;
