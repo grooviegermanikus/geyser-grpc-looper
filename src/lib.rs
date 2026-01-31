@@ -55,8 +55,8 @@ impl TryFrom<SubscribeRequest> for LooperSubscribeRequest {
     }
 }
 
-impl Into<SubscribeRequest> for LooperSubscribeRequest {
-    fn into(self) -> SubscribeRequest {
-        self.inner
+impl From<LooperSubscribeRequest> for SubscribeRequest {
+    fn from(val: LooperSubscribeRequest) -> Self {
+        val.inner
     }
 }

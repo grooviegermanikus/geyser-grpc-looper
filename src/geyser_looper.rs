@@ -36,8 +36,14 @@ pub enum Effect {
 // number of slots to emit late messages
 const LATE_MESSAGES_SAFETY_WINDOW: u64 = 64;
 
+impl Default for GeyserLooper {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl GeyserLooper {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             buffer: BTreeMap::new(),
             confirmed_slots: BTreeSet::new(),
@@ -101,7 +107,7 @@ impl GeyserLooper {
                     return Ok(Effect::Noop);
                 }
 
-                let slot = get_slot(&msg)?;
+                let slot = get_slot(msg)?;
 
                 if self.confirmed_slots.contains(&slot) {
                     trace!("Emit late message for recently confirmed slot {}", slot);
@@ -143,6 +149,7 @@ fn get_slot(update: &UpdateOneof) -> anyhow::Result<Slot> {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 mod tests {
     use std::collections::HashMap;
     use std::fs::File;
@@ -515,19 +522,10 @@ mod tests {
                     }
                 }
 
-                let slot = slot.parse::<u64>().unwrap();
+                // let slot = slot.parse::<u64>().unwrap();
                 // let index = index.parse::<u64>().unwrap();
                 let index = 4242;
-                let signature = Signature::from_str(sig).unwrap();
-
-                // trace!(
-                //     "captures {},{},{},{},{}",
-                //     source_idx,
-                //     slot,
-                //     sig,
-                //     epoch_ms,
-                //     index
-                // );
+                let _signature = Signature::from_str(sig).unwrap();
 
                 let message = yellowstone_grpc_proto::prelude::Message {
                     header: None,
@@ -602,7 +600,7 @@ mod tests {
         #[inline]
         pub const fn new(idx: u32) -> Self {
             assert!(idx > 0, "source index is 1-based");
-            assert!(idx < 5 as u32, "source index too big");
+            assert!(idx < 5_u32, "source index too big");
             SourceIdx(idx)
         }
     }
