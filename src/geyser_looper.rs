@@ -141,29 +141,7 @@ fn get_slot(update: &UpdateOneof) -> anyhow::Result<Slot> {
 }
 
 
-pub fn wrap_subscription_request(subscription: SubscribeRequest) -> SubscribeRequest {
 
-    // as slots with filter_by_commitment = false
-
-    // TODO don't allow slot
-    // TODO add our slot subscription
-    // TODO commitment levev
-
-    assert!(subscription.slots.is_empty(), "user must not request slots; but we will implicitly send confirmed slots");
-    // force callers to set processed to avoid confusion
-    assert_eq!(subscription.commitment, Some(map_commitment_level(CommitmentConfig::processed()) as i32));
-
-    let magic_slots_subscription = SubscribeRequestFilterSlots { filter_by_commitment: None, interslot_updates: None };
-
-    SubscribeRequest {
-        slots: HashMap::from([
-            ("_magic_confirmed_slots".to_string(), magic_slots_subscription),
-        ]),
-        commitment: Some(map_commitment_level(CommitmentConfig::processed()) as i32),
-        ..subscription
-    }
-
-}
 
 
 #[cfg(test)]
