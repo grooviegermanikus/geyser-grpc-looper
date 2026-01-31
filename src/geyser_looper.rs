@@ -334,21 +334,19 @@ mod tests {
             .collect_vec();
 
         for update in iter {
-
-            let subscribe_update =
-                if matches!(update, UpdateOneof::Slot(_)) {
-                    SubscribeUpdate {
-                        filters: vec!["_magic_confirmed_slots".to_string()],
-                        created_at: None,
-                        update_oneof: Some(update),
-                    }
-                } else {
-                    SubscribeUpdate {
-                        filters: vec![],
-                        created_at: None,
-                        update_oneof: Some(update),
-                    }
-                };
+            let subscribe_update = if matches!(update, UpdateOneof::Slot(_)) {
+                SubscribeUpdate {
+                    filters: vec!["_magic_confirmed_slots".to_string()],
+                    created_at: None,
+                    update_oneof: Some(update),
+                }
+            } else {
+                SubscribeUpdate {
+                    filters: vec![],
+                    created_at: None,
+                    update_oneof: Some(update),
+                }
+            };
 
             let result = looper.consume_move(subscribe_update).unwrap();
 
