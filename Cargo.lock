@@ -1104,6 +1104,7 @@ dependencies = [
  "solana-transaction",
  "solana-vote",
  "solana-vote-interface",
+ "thiserror 2.0.18",
  "tokio",
  "tokio-metrics",
  "tokio-stream",

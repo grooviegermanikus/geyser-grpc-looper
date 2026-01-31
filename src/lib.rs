@@ -1,7 +1,9 @@
 use std::collections::HashMap;
+use anyhow::bail;
 use solana_commitment_config::CommitmentConfig;
 use yellowstone_grpc_proto::geyser::SubscribeRequestFilterSlots;
 use yellowstone_grpc_proto::prelude::SubscribeRequest;
+use crate::LooperError::{CannotRequestSlots, OnlyCommittedProcessedAllowed};
 use crate::yellow_util::map_commitment_level;
 
 pub mod geyser_looper;
@@ -11,14 +13,28 @@ pub struct LooperSubscribeRequest {
     inner: SubscribeRequest,
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum LooperError {
+    #[error("LooperSubscribeRequest does not support user-defined slot subscriptions; they will be ignored")]
+    CannotRequestSlots,
+
+    #[error("LooperSubscribeRequest only supports CommitmentConfig::processed()")]
+    OnlyCommittedProcessedAllowed
+}
+
+
 impl TryFrom<SubscribeRequest> for LooperSubscribeRequest {
-    type Error = ();
+    type Error = LooperError;
 
     fn try_from(subscription: SubscribeRequest) -> Result<Self, Self::Error> {
 
-        assert!(subscription.slots.is_empty(), "user must not request slots; but we will implicitly send confirmed slots");
+        if !subscription.slots.is_empty() {
+            return Err(CannotRequestSlots);
+        }
         // force callers to set processed to avoid confusion
-        assert_eq!(subscription.commitment, Some(map_commitment_level(CommitmentConfig::processed()) as i32));
+        if subscription.commitment != Some(map_commitment_level(CommitmentConfig::processed()) as i32) {
+            return Err(OnlyCommittedProcessedAllowed);
+        }
 
         let magic_slots_subscription = SubscribeRequestFilterSlots { filter_by_commitment: None, interslot_updates: None };
 
