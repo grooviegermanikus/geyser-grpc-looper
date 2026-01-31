@@ -8,8 +8,7 @@ use yellowstone_grpc_proto::geyser::subscribe_update::UpdateOneof;
 use yellowstone_grpc_proto::geyser::{SlotStatus, SubscribeUpdate};
 
 pub struct MessagesBuffer {
-    #[allow(clippy::vec_box)]
-    grpc_updates: Vec<Box<SubscribeUpdate>>,
+    grpc_updates: Vec<SubscribeUpdate>,
 }
 
 // note: there is still an ordering problem where data might arrive after slot confirmed message was seen
@@ -24,7 +23,7 @@ pub struct GeyserLooper {
 pub enum Effect {
     EmitConfirmedMessages {
         confirmed_slot: Slot,
-        grpc_updates: Vec<Box<SubscribeUpdate>>,
+        grpc_updates: Vec<SubscribeUpdate>,
     },
     // some messages might arrive after confirmed slot was seen
     EmitLateConfirmedMessage {
@@ -36,12 +35,6 @@ pub enum Effect {
 
 // number of slots to emit late messages
 const LATE_MESSAGES_SAFETY_WINDOW: u64 = 64;
-
-impl Default for GeyserLooper {
-    fn default() -> Self {
-        Self::new()
-    }
-}
 
 impl GeyserLooper {
     pub const fn new() -> Self {
@@ -78,7 +71,7 @@ impl GeyserLooper {
                     });
 
                 // append the slot message
-                messages.grpc_updates.push(update);
+                messages.grpc_updates.push(*update);
 
                 // clean all older slots; could clean up more aggressively but this is safe+good enough
                 self.buffer.retain(|&slot, _| slot > confirmed_slot);
@@ -124,7 +117,7 @@ impl GeyserLooper {
                         grpc_updates: Vec::with_capacity(64),
                     })
                     .grpc_updates
-                    .push(update);
+                    .push(*update);
             }
             None => {
                 // not really expected
@@ -168,6 +161,7 @@ mod tests {
     use solana_pubkey::Pubkey;
     use solana_signature::Signature;
     use std::str::FromStr;
+    use solana_clock::Slot;
     use yellowstone_grpc_proto::geyser::subscribe_update::UpdateOneof;
     use yellowstone_grpc_proto::prelude::{SubscribeUpdateAccountInfo, TransactionStatusMeta};
 
@@ -175,16 +169,7 @@ mod tests {
     pub fn test_simple() {
         let mut looper = GeyserLooper::new();
 
-        let effect = looper.consume_move(SubscribeUpdate {
-            filters: vec![],
-            created_at: None,
-            update_oneof: Some(UpdateOneof::Slot(SubscribeUpdateSlot {
-                slot: 41_999_000,
-                parent: None,
-                status: ySS::SlotConfirmed as i32,
-                dead_error: None,
-            })),
-        });
+        let effect = looper.consume_confirmed_slot(41_999_000);
         let Ok(Effect::EmitConfirmedMessages {
             confirmed_slot,
             grpc_updates: grpc_update,
@@ -224,7 +209,7 @@ mod tests {
         assert!(matches!(effect, Ok(Effect::Noop)));
 
         let effect = looper.consume_move(SubscribeUpdate {
-            filters: vec![],
+            filters: vec!["_magic_confirmed_slots".to_string()],
             created_at: None,
             update_oneof: Some(UpdateOneof::Slot(SubscribeUpdateSlot {
                 slot: 42_000_000,
@@ -235,22 +220,13 @@ mod tests {
         });
         assert!(matches!(effect, Ok(Effect::Noop)));
 
-        let effect = looper.consume_move(SubscribeUpdate {
-            filters: vec![],
-            created_at: None,
-            update_oneof: Some(UpdateOneof::Slot(SubscribeUpdateSlot {
-                slot: 42_000_000,
-                parent: None,
-                status: ySS::SlotConfirmed as i32,
-                dead_error: None,
-            })),
-        });
+        let effect = looper.consume_confirmed_slot(42_000_000);
         assert!(matches!(effect, Ok(Effect::EmitConfirmedMessages { .. })));
     }
 
     #[test]
     pub fn test_emit_late_message() {
-        let mut looper = GeyserLooper::new();
+        let mut looper = GeyserLooper::new();;
 
         let sig1 = Signature::from_str("2h6iPLYZEEt8RMY3gGFUqd4Jktrg2fYTCMffifRoQDJWPqLvZ1gRKqpq4e5s8kWrVigkyDXV6xEiw54zuChYBdyB").unwrap();
 
@@ -269,16 +245,7 @@ mod tests {
         });
         assert!(matches!(effect, Ok(Effect::Noop)));
 
-        let effect = looper.consume_move(SubscribeUpdate {
-            filters: vec![],
-            created_at: None,
-            update_oneof: Some(UpdateOneof::Slot(SubscribeUpdateSlot {
-                slot: 43_000_000,
-                parent: None,
-                status: ySS::SlotConfirmed as i32,
-                dead_error: None,
-            })),
-        });
+        let effect = looper.consume_confirmed_slot(43_000_000);
         let Ok(Effect::EmitConfirmedMessages {
             confirmed_slot,
             grpc_updates: grpc_update,
@@ -590,4 +557,21 @@ mod tests {
             SourceIdx(idx)
         }
     }
+
+    impl GeyserLooper {
+        pub fn consume_confirmed_slot(&mut self, confirmed_slot: Slot) -> anyhow::Result<Effect> {
+            self.consume_move(SubscribeUpdate {
+                filters: vec!["_magic_confirmed_slots".to_string()],
+                created_at: None,
+                update_oneof: Some(UpdateOneof::Slot(SubscribeUpdateSlot {
+                    slot: confirmed_slot,
+                    parent: None,
+                    status: ySS::SlotConfirmed as i32,
+                    dead_error: None,
+                })),
+            })
+
+        }
+    }
+
 }
