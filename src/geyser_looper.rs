@@ -36,6 +36,12 @@ pub enum Effect {
 // number of slots to emit late messages
 const LATE_MESSAGES_SAFETY_WINDOW: u64 = 64;
 
+impl Default for GeyserLooper {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl GeyserLooper {
     pub const fn new() -> Self {
         Self {
