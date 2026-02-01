@@ -50,11 +50,7 @@ impl GeyserLooper {
         }
     }
 
-    pub fn consume_move(&mut self, update: SubscribeUpdate) -> anyhow::Result<Effect> {
-        self.consume(Box::new(update))
-    }
-
-    pub fn consume(&mut self, update: Box<SubscribeUpdate>) -> anyhow::Result<Effect> {
+    pub fn consume(&mut self, update: SubscribeUpdate) -> anyhow::Result<Effect> {
         match update.update_oneof.as_ref() {
             Some(UpdateOneof::Slot(msg)) => {
                 if update.filters != vec!["_magic_confirmed_slots".to_string()] {
@@ -77,7 +73,7 @@ impl GeyserLooper {
                     });
 
                 // append the slot message
-                messages.grpc_updates.push(*update);
+                messages.grpc_updates.push(update);
 
                 // clean all older slots; could clean up more aggressively but this is safe+good enough
                 self.buffer.retain(|&slot, _| slot > confirmed_slot);
@@ -113,7 +109,7 @@ impl GeyserLooper {
                     trace!("Emit late message for recently confirmed slot {}", slot);
                     return Ok(Effect::EmitLateConfirmedMessage {
                         confirmed_slot: slot,
-                        grpc_update: update,
+                        grpc_update: Box::new(update),
                     });
                 }
 
@@ -123,7 +119,7 @@ impl GeyserLooper {
                         grpc_updates: Vec::with_capacity(64),
                     })
                     .grpc_updates
-                    .push(*update);
+                    .push(update);
             }
             None => {
                 // not really expected
@@ -191,7 +187,7 @@ mod tests {
         let sig3 = Signature::from_str("KQzbyZMUq6ujZL6qxDW2EMNUugvzcpFJSdzTnmhsV8rYgqkwL9rc3uXg1FpGPNKaSJQLmKXTfezJoVdBLEhVa8F").unwrap();
 
         for sig in [sig1, sig2, sig3] {
-            let effect = looper.consume_move(SubscribeUpdate {
+            let effect = looper.consume(SubscribeUpdate {
                 filters: vec![],
                 created_at: None,
                 update_oneof: Some(UpdateOneof::TransactionStatus(
@@ -207,14 +203,14 @@ mod tests {
             assert!(matches!(effect, Ok(Effect::Noop)));
         }
 
-        let effect = looper.consume_move(SubscribeUpdate {
+        let effect = looper.consume(SubscribeUpdate {
             filters: vec![],
             created_at: None,
             update_oneof: Some(UpdateOneof::Ping(SubscribeUpdatePing {})),
         });
         assert!(matches!(effect, Ok(Effect::Noop)));
 
-        let effect = looper.consume_move(SubscribeUpdate {
+        let effect = looper.consume(SubscribeUpdate {
             filters: vec!["_magic_confirmed_slots".to_string()],
             created_at: None,
             update_oneof: Some(UpdateOneof::Slot(SubscribeUpdateSlot {
@@ -236,7 +232,7 @@ mod tests {
 
         let sig1 = Signature::from_str("2h6iPLYZEEt8RMY3gGFUqd4Jktrg2fYTCMffifRoQDJWPqLvZ1gRKqpq4e5s8kWrVigkyDXV6xEiw54zuChYBdyB").unwrap();
 
-        let effect = looper.consume_move(SubscribeUpdate {
+        let effect = looper.consume(SubscribeUpdate {
             filters: vec![],
             created_at: None,
             update_oneof: Some(UpdateOneof::TransactionStatus(
@@ -265,7 +261,7 @@ mod tests {
         let sig3 = Signature::from_str("KQzbyZMUq6ujZL6qxDW2EMNUugvzcpFJSdzTnmhsV8rYgqkwL9rc3uXg1FpGPNKaSJQLmKXTfezJoVdBLEhVa8F").unwrap();
 
         // insert into next slot
-        let effect = looper.consume_move(SubscribeUpdate {
+        let effect = looper.consume(SubscribeUpdate {
             filters: vec![],
             created_at: None,
             update_oneof: Some(UpdateOneof::TransactionStatus(
@@ -281,7 +277,7 @@ mod tests {
         assert!(matches!(effect, Ok(Effect::Noop)));
 
         let sig_late = Signature::from_str("5QE2kQUiMpv51seq4ShtoaAzdkMT7fzeQ5TvqTPFgNkcahtHSnZudindggjTUXt8uqZGifbWUAmUubdWLhFHz719").unwrap();
-        let effect = looper.consume_move(SubscribeUpdate {
+        let effect = looper.consume(SubscribeUpdate {
             filters: vec![],
             created_at: None,
             update_oneof: Some(UpdateOneof::TransactionStatus(
@@ -311,7 +307,7 @@ mod tests {
         }
 
         let sig_verylate = Signature::from_str("5QE2kQUiMpv51seq4ShtoaAzdkMT7fzeQ5TvqTPFgNkcahtHSnZudindggjTUXt8uqZGifbWUAmUubdWLhFHz719").unwrap();
-        let effect = looper.consume_move(SubscribeUpdate {
+        let effect = looper.consume(SubscribeUpdate {
             filters: vec![],
             created_at: None,
             update_oneof: Some(UpdateOneof::TransactionStatus(
@@ -354,7 +350,7 @@ mod tests {
                 }
             };
 
-            let result = looper.consume_move(subscribe_update).unwrap();
+            let result = looper.consume(subscribe_update).unwrap();
 
             match result {
                 Effect::EmitConfirmedMessages {
@@ -575,7 +571,7 @@ mod tests {
 
     impl GeyserLooper {
         pub fn consume_confirmed_slot(&mut self, confirmed_slot: Slot) -> anyhow::Result<Effect> {
-            self.consume_move(SubscribeUpdate {
+            self.consume(SubscribeUpdate {
                 filters: vec!["_magic_confirmed_slots".to_string()],
                 created_at: None,
                 update_oneof: Some(UpdateOneof::Slot(SubscribeUpdateSlot {
