@@ -1,9 +1,10 @@
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use anyhow::{bail, Context};
-use log::trace;
+use log::{trace, warn};
 use solana_clock::Slot;
 use std::collections::{BTreeMap, BTreeSet};
+use itertools::Itertools;
 use yellowstone_grpc_proto::geyser::subscribe_update::UpdateOneof;
 use yellowstone_grpc_proto::geyser::{SlotStatus, SubscribeUpdate};
 
@@ -78,7 +79,12 @@ impl GeyserLooper {
                 // clean all older slots; could clean up more aggressively but this is safe+good enough
                 self.buffer.retain(|&slot, _| slot > confirmed_slot);
                 // we don't expect wide span of process slots around in the future
-                debug_assert!(self.buffer.len() < 10, "buffer should be small");
+                // this assumption broken:
+                // debug_assert!(self.buffer.len() < 10, "buffer should be small");
+                if self.buffer.len() >= 10 {
+                    warn!("buffer has {} slots after confirming slot {}, this might indicate a problem, slots={:?}",
+                        self.buffer.len(), confirmed_slot, self.buffer.keys().collect_vec());
+                }
 
                 let was_new = self.confirmed_slots.insert(confirmed_slot);
                 debug_assert!(was_new, "only one confirmed slot message expected");
