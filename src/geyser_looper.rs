@@ -87,7 +87,10 @@ impl GeyserLooper {
                 }
 
                 let was_new = self.confirmed_slots.insert(confirmed_slot);
-                debug_assert!(was_new, "only one confirmed slot message expected");
+                if !was_new {
+                    // saw this case on prod, 2026-02-27T10:51:31.842213Z
+                    warn!("confirmed slot {} was already seen", confirmed_slot);
+                }
 
                 // clean up the window of confirmed_slots
                 self.confirmed_slots
