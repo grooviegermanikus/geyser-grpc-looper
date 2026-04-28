@@ -54,7 +54,8 @@ impl GeyserLooper {
     pub fn consume(&mut self, update: SubscribeUpdate) -> anyhow::Result<Effect> {
         match update.update_oneof.as_ref() {
             Some(UpdateOneof::Slot(msg)) => {
-                if update.filters != vec!["_magic_confirmed_slots".to_string()] {
+                // yellowstone-grpc now adds "__autoreconnect"
+                if !update.filters.contains(&"_magic_confirmed_slots".to_string()) {
                     bail!("unexpected slot message with filters: {:?}", update.filters);
                 }
                 let commitment_status =
