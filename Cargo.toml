@@ -1,6 +1,6 @@
 [package]
 name = "geyser-grpc-looper"
-version = "0.0.1"
+version = "1.0.0"
 edition = "2021"
 
 description = "Allow consumers of yellowstone-grpc stream to emulate commitment level confirmed off an stream of PROCESSED data"
