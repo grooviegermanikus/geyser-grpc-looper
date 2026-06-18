@@ -1,5 +1,5 @@
 use crate::yellow_util::map_commitment_level;
-use crate::LooperError::{CannotRequestSlots, OnlyCommittedProcessedAllowed};
+use crate::LooperError::{SlotsSubscriptionError, OnlyCommittedProcessedAllowed};
 use solana_commitment_config::CommitmentConfig;
 use std::collections::HashMap;
 use yellowstone_grpc_proto::geyser::SubscribeRequestFilterSlots;
@@ -15,8 +15,8 @@ pub struct LooperSubscribeRequest {
 
 #[derive(Debug, thiserror::Error)]
 pub enum LooperError {
-    #[error("LooperSubscribeRequest does not support user-defined slot subscriptions; they will be ignored")]
-    CannotRequestSlots,
+    #[error("LooperSubscribeRequest contains incompatible slot subscription")]
+    SlotsSubscriptionError,
 
     #[error("LooperSubscribeRequest only supports CommitmentConfig::processed()")]
     OnlyCommittedProcessedAllowed,
@@ -26,9 +26,9 @@ impl TryFrom<SubscribeRequest> for LooperSubscribeRequest {
     type Error = LooperError;
 
     fn try_from(subscription: SubscribeRequest) -> Result<Self, Self::Error> {
-        if !subscription.slots.is_empty() {
-            return Err(CannotRequestSlots);
-        }
+        // if !subscription.slots.is_empty() {
+        //     return Err(CannotRequestSlots);
+        // }
         // force callers to set processed to avoid confusion
         if subscription.commitment
             != Some(map_commitment_level(CommitmentConfig::processed()) as i32)
@@ -36,16 +36,22 @@ impl TryFrom<SubscribeRequest> for LooperSubscribeRequest {
             return Err(OnlyCommittedProcessedAllowed);
         }
 
+        let mut slots = subscription.slots.clone();
+        if slots.contains_key("_magic_confirmed_slots") {
+            return Err(SlotsSubscriptionError);
+        }
+
         let magic_slots_subscription = SubscribeRequestFilterSlots {
             filter_by_commitment: None,
             interslot_updates: None,
         };
+        slots.insert(
+            "_magic_confirmed_slots".to_string(),
+            magic_slots_subscription,
+        );
 
         let subscribe_request = SubscribeRequest {
-            slots: HashMap::from([(
-                "_magic_confirmed_slots".to_string(),
-                magic_slots_subscription,
-            )]),
+            slots,
             commitment: Some(map_commitment_level(CommitmentConfig::processed()) as i32),
             ..subscription
         };
@@ -60,4 +66,30 @@ impl From<LooperSubscribeRequest> for SubscribeRequest {
     fn from(val: LooperSubscribeRequest) -> Self {
         val.inner
     }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mangle_slot_subscritpions() {
+        let subscription = SubscribeRequest {
+            slots: HashMap::from([(
+                "some_user_subscription".to_string(),
+                SubscribeRequestFilterSlots {
+                    filter_by_commitment: None,
+                    interslot_updates: Some(true),
+                },
+            )]),
+            commitment: Some(map_commitment_level(CommitmentConfig::processed()) as i32),
+            ..SubscribeRequest::default()
+        };
+
+        let looper = LooperSubscribeRequest::try_from(subscription).unwrap();
+
+        assert_eq!(looper.inner.slots.len(), 2);
+    }
+
 }
