@@ -26,9 +26,6 @@ impl TryFrom<SubscribeRequest> for LooperSubscribeRequest {
     type Error = LooperError;
 
     fn try_from(subscription: SubscribeRequest) -> Result<Self, Self::Error> {
-        // if !subscription.slots.is_empty() {
-        //     return Err(CannotRequestSlots);
-        // }
         // force callers to set processed to avoid confusion
         if subscription.commitment
             != Some(map_commitment_level(CommitmentConfig::processed()) as i32)
@@ -37,7 +34,7 @@ impl TryFrom<SubscribeRequest> for LooperSubscribeRequest {
         }
 
         let mut slots = subscription.slots.clone();
-        if slots.contains_key("_magic_confirmed_slots") {
+        if slots.contains_key("__magic_confirmed_slots") {
             return Err(SlotsSubscriptionError);
         }
 
@@ -46,7 +43,7 @@ impl TryFrom<SubscribeRequest> for LooperSubscribeRequest {
             interslot_updates: None,
         };
         slots.insert(
-            "_magic_confirmed_slots".to_string(),
+            "__magic_confirmed_slots".to_string(),
             magic_slots_subscription,
         );
 

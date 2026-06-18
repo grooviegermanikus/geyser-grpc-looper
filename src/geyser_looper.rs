@@ -55,7 +55,7 @@ impl GeyserLooper {
         match update.update_oneof.as_ref() {
             Some(UpdateOneof::Slot(msg)) => {
                 // yellowstone-grpc now adds "__autoreconnect"
-                if !update.filters.contains(&"_magic_confirmed_slots".to_string()) {
+                if !update.filters.contains(&"__magic_confirmed_slots".to_string()) {
                     bail!("unexpected slot message with filters: {:?}", update.filters);
                 }
                 let commitment_status =
@@ -221,7 +221,7 @@ mod tests {
         assert!(matches!(effect, Ok(Effect::Noop)));
 
         let effect = looper.consume(SubscribeUpdate {
-            filters: vec!["_magic_confirmed_slots".to_string()],
+            filters: vec!["__magic_confirmed_slots".to_string()],
             created_at: None,
             update_oneof: Some(UpdateOneof::Slot(SubscribeUpdateSlot {
                 slot: 42_000_000,
@@ -348,7 +348,7 @@ mod tests {
         for update in iter {
             let subscribe_update = if matches!(update, UpdateOneof::Slot(_)) {
                 SubscribeUpdate {
-                    filters: vec!["_magic_confirmed_slots".to_string()],
+                    filters: vec!["__magic_confirmed_slots".to_string()],
                     created_at: None,
                     update_oneof: Some(update),
                 }
@@ -582,7 +582,7 @@ mod tests {
     impl GeyserLooper {
         pub fn consume_confirmed_slot(&mut self, confirmed_slot: Slot) -> anyhow::Result<Effect> {
             self.consume(SubscribeUpdate {
-                filters: vec!["_magic_confirmed_slots".to_string()],
+                filters: vec!["__magic_confirmed_slots".to_string()],
                 created_at: None,
                 update_oneof: Some(UpdateOneof::Slot(SubscribeUpdateSlot {
                     slot: confirmed_slot,
