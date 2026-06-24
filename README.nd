@@ -1,7 +1,0 @@
-This crate is not useful if only commitment level PROCESSED is required
-
-
-Advantages:
-* messages will not be helt back until level CONFIRMED is reached, but will be streamed to client early
-* messages will not be sent in a huge burst to client
-* pressure on memory system on the validator node will be reduced (though it will still be high on client side)
