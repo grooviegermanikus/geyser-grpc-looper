@@ -65,6 +65,12 @@ impl GeyserLooper {
                     // we do not pass through slot processed+finalized
                     return Ok(Effect::Noop);
                 }
+                // workaround for #1
+                if msg.parent.is_some() {
+                    // catch only the first of two SlotConfirmed messags
+                    return Ok(Effect::Noop);
+                }
+
                 let confirmed_slot = msg.slot;
                 // lazily fall back to empty list
                 let mut messages = self
