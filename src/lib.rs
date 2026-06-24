@@ -1,7 +1,6 @@
 use crate::yellow_util::map_commitment_level;
 use crate::LooperError::{SlotsSubscriptionError, OnlyCommittedProcessedAllowed};
 use solana_commitment_config::CommitmentConfig;
-use std::collections::HashMap;
 use yellowstone_grpc_proto::geyser::SubscribeRequestFilterSlots;
 use yellowstone_grpc_proto::prelude::SubscribeRequest;
 
@@ -69,6 +68,7 @@ impl From<LooperSubscribeRequest> for SubscribeRequest {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
 
     #[test]
     fn mangle_slot_subscritpions() {

@@ -25,7 +25,7 @@ solana-signature = "3"
 # Solana Misc
 
 # Yellowstone
-yellowstone-grpc-proto = "12"
+yellowstone-grpc-proto = "11"
 
 [dev-dependencies]
 regex = "1.10"
