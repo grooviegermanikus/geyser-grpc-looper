@@ -21,6 +21,8 @@ pub struct GeyserLooper {
     confirmed_slots: BTreeSet<Slot>,
 }
 
+
+#[derive(Debug)]
 pub enum Effect {
     EmitConfirmedMessages {
         confirmed_slot: Slot,
@@ -66,10 +68,11 @@ impl GeyserLooper {
                     return Ok(Effect::Noop);
                 }
                 // workaround for #1
-                if msg.parent.is_some() {
+                // CAUTION: do not do this; there might be all three cases: 1) parent+no_parent 2) no_parent 3) parent
+                // if msg.parent.is_some() {
                     // catch only the first of two SlotConfirmed messags
-                    return Ok(Effect::Noop);
-                }
+                    // return Ok(Effect::Noop);
+                // }
 
                 let confirmed_slot = msg.slot;
                 // lazily fall back to empty list
@@ -95,8 +98,8 @@ impl GeyserLooper {
 
                 let was_new = self.confirmed_slots.insert(confirmed_slot);
                 if !was_new {
-                    // saw this case on prod, 2026-02-27T10:51:31.842213Z
-                    warn!("confirmed slot {} was already seen", confirmed_slot);
+                    // see issue #1
+                    trace!("confirmed slot {} was already seen", confirmed_slot);
                 }
 
                 // clean up the window of confirmed_slots
