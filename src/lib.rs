@@ -15,7 +15,7 @@ pub struct LooperSubscribeRequest {
 
 #[derive(Debug, thiserror::Error)]
 pub enum LooperError {
-    #[error("LooperSubscribeRequest does not support user-defined slot subscriptions; they will be ignored")]
+    #[error("LooperSubscribeRequest does not support user-defined slot subscriptions; remove them from the request")]
     CannotRequestSlots,
 
     #[error("LooperSubscribeRequest only supports CommitmentConfig::processed()")]
