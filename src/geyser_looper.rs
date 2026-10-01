@@ -57,7 +57,7 @@ impl GeyserLooper {
         match update.update_oneof.as_ref() {
             Some(UpdateOneof::Slot(msg)) => {
                 // yellowstone-grpc now adds "__autoreconnect"
-                if !update.filters.contains(&"__magic_confirmed_slots".to_string()) {
+                if !update.filters.iter().any(|f| f == "__magic_confirmed_slots") {
                     bail!("unexpected slot message with filters: {:?}", update.filters);
                 }
                 let commitment_status =
