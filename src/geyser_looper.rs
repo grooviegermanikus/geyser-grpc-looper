@@ -322,7 +322,7 @@ mod tests {
             UpdateOneof::TransactionStatus(tx_status) => {
                 assert_eq!(tx_status.index, 99);
             }
-            _ => {}
+            other => panic!("expected TransactionStatus late message, got {:?}", other),
         }
 
         let sig_verylate = Signature::from_str("5QE2kQUiMpv51seq4ShtoaAzdkMT7fzeQ5TvqTPFgNkcahtHSnZudindggjTUXt8uqZGifbWUAmUubdWLhFHz719").unwrap();
