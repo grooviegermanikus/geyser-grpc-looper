@@ -1,9 +1,10 @@
 
-Why you want that?
+Why you want that - or not?
 * useful if you only need commitment level CONFIRMED; not useful if you need PROCESSED
 * messages will reach clients earlier because they will not wait in the buffer on validator side
 * messages will not be sent in a single burst to client
 * pressure on memory system on the validator node will be reduced - but will be higher on client side
+* not too useful if the subscription is small
 
 How it works?
 * problematic flow inside the yellowstone geyser plugin:
